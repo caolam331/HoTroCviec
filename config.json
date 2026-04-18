@@ -1,5 +1,5 @@
 {
-  "active_profile": "999",
+  "active_profile": "Mặc định",
   "profiles": [
     {
       "name": "Mặc định",
@@ -7,263 +7,112 @@
       "columns": 3,
       "buttons": [
         {
-          "id": "hello",
-          "label": "Hello World",
-          "icon": "★",
-          "color": "#2196F3",
-          "script": "tasks/hello.py",
-          "description": "In ra lời chào",
+          "id": "git_log_today",
+          "label": "Git Log Hôm nay",
+          "icon": "📋",
+          "color": "#1976D2",
+          "script": "tasks/git_log_today.py",
+          "description": "Xem commit hôm nay của toàn team",
           "params": [
             {
-              "name": "name",
-              "label": "Tên của bạn",
-              "type": "text",
-              "default": "World",
-              "required": true
-            },
-            {
-              "name": "greet",
-              "label": "Kiểu chào",
-              "type": "choice",
-              "options": [
-                "Hello",
-                "Hi",
-                "Hey",
-                "Xin chào"
-              ],
-              "default": "Hello"
-            }
-          ]
-        },
-        {
-          "id": "backup",
-          "label": "Backup Files",
-          "icon": "⬆",
-          "color": "#4CAF50",
-          "script": "tasks/backup.py",
-          "description": "Sao lưu thư mục",
-          "params": [
-            {
-              "name": "source",
-              "label": "Thư mục nguồn",
+              "name": "repo_path",
+              "label": "Thư mục repo",
               "type": "folder",
               "default": "",
               "required": true
             },
             {
-              "name": "destination",
-              "label": "Thư mục đích",
-              "type": "folder",
-              "default": "",
-              "required": true
-            },
-            {
-              "name": "compress",
-              "label": "Nén file",
-              "type": "boolean",
-              "default": true
-            }
-          ]
-        },
-        {
-          "id": "ping",
-          "label": "Ping Host",
-          "icon": "◉",
-          "color": "#FF9800",
-          "script": "tasks/ping_host.py",
-          "description": "Kiểm tra kết nối mạng",
-          "params": [
-            {
-              "name": "host",
-              "label": "Host / IP",
-              "type": "text",
-              "default": "google.com",
-              "required": true
-            },
-            {
-              "name": "count",
-              "label": "Số lần ping",
-              "type": "number",
-              "default": 4
-            }
-          ]
-        },
-        {
-          "id": "rename",
-          "label": "Rename Files",
-          "icon": "✎",
-          "color": "#9C27B0",
-          "script": "tasks/rename_files.py",
-          "description": "Đổi tên hàng loạt file",
-          "params": [
-            {
-              "name": "folder",
-              "label": "Thư mục",
-              "type": "folder",
-              "default": "",
-              "required": true
-            },
-            {
-              "name": "pattern",
-              "label": "Pattern (regex)",
-              "type": "text",
-              "default": ".*"
-            },
-            {
-              "name": "prefix",
-              "label": "Tiền tố",
+              "name": "author",
+              "label": "Tác giả (để trống = tất cả)",
               "type": "text",
               "default": ""
+            }
+          ]
+        },
+        {
+          "id": "run_tests",
+          "label": "Chạy Tests",
+          "icon": "✓",
+          "color": "#2E7D32",
+          "script": "tasks/run_tests.py",
+          "description": "Chạy bộ kiểm thử tự động",
+          "params": [
+            {
+              "name": "project_path",
+              "label": "Thư mục dự án",
+              "type": "folder",
+              "default": "",
+              "required": true
             },
             {
-              "name": "dry_run",
-              "label": "Chạy thử (không thay đổi)",
+              "name": "test_command",
+              "label": "Lệnh test",
+              "type": "text",
+              "default": "pytest"
+            },
+            {
+              "name": "verbose",
+              "label": "Chi tiết",
               "type": "boolean",
               "default": true
             }
           ]
         },
         {
-          "id": "sysinfo",
-          "label": "System Info",
-          "icon": "☰",
-          "color": "#607D8B",
-          "script": "tasks/sysinfo.py",
-          "description": "Thông tin hệ thống",
-          "params": []
-        },
-        {
-          "id": "countdown",
-          "label": "Countdown Timer",
-          "icon": "⏱",
-          "color": "#F44336",
-          "script": "tasks/countdown.py",
-          "description": "Hẹn giờ đếm ngược",
+          "id": "run_linter",
+          "label": "Kiểm tra Code",
+          "icon": "🔍",
+          "color": "#388E3C",
+          "script": "tasks/run_linter.py",
+          "description": "Chạy linter kiểm tra chất lượng code",
           "params": [
             {
-              "name": "seconds",
-              "label": "Số giây",
-              "type": "number",
-              "default": 10,
+              "name": "project_path",
+              "label": "Thư mục dự án",
+              "type": "folder",
+              "default": "",
               "required": true
             },
             {
-              "name": "message",
-              "label": "Thông báo khi xong",
-              "type": "text",
-              "default": "Done!"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "999",
-      "title": "Task Dashboard",
-      "columns": 3,
-      "buttons": [
-        {
-          "id": "hello",
-          "label": "Hello World",
-          "icon": "★",
-          "color": "#2196F3",
-          "script": "tasks/hello.py",
-          "description": "In ra lời chào",
-          "params": [
-            {
-              "name": "name",
-              "label": "Tên của bạn",
-              "type": "text",
-              "default": "World",
-              "required": true
-            },
-            {
-              "name": "greet",
-              "label": "Kiểu chào",
+              "name": "linter",
+              "label": "Linter",
               "type": "choice",
               "options": [
-                "Hello",
-                "Hi",
-                "Hey",
-                "Xin chào"
+                "flake8",
+                "pylint",
+                "eslint",
+                "ruff"
               ],
-              "default": "Hello"
+              "default": "flake8"
             }
           ]
         },
         {
-          "id": "backup",
-          "label": "Backup Files",
-          "icon": "⬆",
-          "color": "#4CAF50",
-          "script": "tasks/backup.py",
-          "description": "Sao lưu thư mục",
+          "id": "check_deps",
+          "label": "Kiểm tra Dependencies",
+          "icon": "📦",
+          "color": "#43A047",
+          "script": "tasks/check_deps.py",
+          "description": "Kiểm tra các gói phụ thuộc lỗi thời",
           "params": [
             {
-              "name": "source",
-              "label": "Thư mục nguồn",
+              "name": "project_path",
+              "label": "Thư mục dự án",
               "type": "folder",
               "default": "",
               "required": true
             },
             {
-              "name": "destination",
-              "label": "Thư mục đích",
-              "type": "folder",
-              "default": "",
-              "required": true
-            },
-            {
-              "name": "compress",
-              "label": "Nén file",
-              "type": "boolean",
-              "default": true
-            }
-          ]
-        },
-        {
-          "id": "ping",
-          "label": "Ping Host",
-          "icon": "◉",
-          "color": "#FF9800",
-          "script": "tasks/ping_host.py",
-          "description": "Kiểm tra kết nối mạng",
-          "params": [
-            {
-              "name": "host",
-              "label": "Host / IP",
-              "type": "text",
-              "default": "google.com",
-              "required": true
-            },
-            {
-              "name": "count",
-              "label": "Số lần ping",
-              "type": "number",
-              "default": 4
-            }
-          ]
-        },
-        {
-          "id": "countdown",
-          "label": "Countdown Timer",
-          "icon": "⏱",
-          "color": "#F44336",
-          "script": "tasks/countdown.py",
-          "description": "Hẹn giờ đếm ngược",
-          "params": [
-            {
-              "name": "seconds",
-              "label": "Số giây",
-              "type": "number",
-              "default": 10,
-              "required": true
-            },
-            {
-              "name": "message",
-              "label": "Thông báo khi xong",
-              "type": "text",
-              "default": "Done!"
+              "name": "manager",
+              "label": "Package manager",
+              "type": "choice",
+              "options": [
+                "pip",
+                "npm",
+                "yarn",
+                "pnpm"
+              ],
+              "default": "pip"
             }
           ]
         }

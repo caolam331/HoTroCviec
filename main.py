@@ -70,6 +70,255 @@ DEFAULT_BUTTONS = [
     },
 ]
 
+LIBRARY_CATEGORIES = [
+    ("⚙ Hệ thống", [
+        {
+            "id": "sysinfo", "label": "System Info", "icon": "☰", "color": "#607D8B",
+            "script": "tasks/sysinfo.py", "description": "Thông tin hệ thống", "params": [],
+        },
+        {
+            "id": "check_disk", "label": "Kiểm tra ổ đĩa", "icon": "💿", "color": "#00695C",
+            "script": "tasks/check_disk.py", "description": "Dung lượng ổ đĩa còn trống",
+            "params": [
+                {"name": "path", "label": "Ổ đĩa / thư mục", "type": "text", "default": "C:\\", "required": True},
+            ],
+        },
+        {
+            "id": "kill_port", "label": "Kill Port", "icon": "🔌", "color": "#6D4C41",
+            "script": "tasks/kill_port.py", "description": "Dừng tiến trình đang chiếm một cổng",
+            "params": [
+                {"name": "port", "label": "Số cổng", "type": "number", "default": 8080, "required": True},
+            ],
+        },
+        {
+            "id": "tail_log", "label": "Xem Log", "icon": "📄", "color": "#455A64",
+            "script": "tasks/tail_log.py", "description": "Xem N dòng cuối của file log",
+            "params": [
+                {"name": "log_file", "label": "File log", "type": "file", "default": "", "required": True},
+                {"name": "lines", "label": "Số dòng", "type": "number", "default": 100},
+            ],
+        },
+        {
+            "id": "countdown", "label": "Countdown Timer", "icon": "⏱", "color": "#F44336",
+            "script": "tasks/countdown.py", "description": "Hẹn giờ đếm ngược",
+            "params": [
+                {"name": "seconds", "label": "Số giây", "type": "number", "default": 10, "required": True},
+                {"name": "message", "label": "Thông báo khi xong", "type": "text", "default": "Done!"},
+            ],
+        },
+    ]),
+    ("🌿 Git & Phiên bản", [
+        {
+            "id": "git_pull_all", "label": "Git Pull All", "icon": "⬇", "color": "#1565C0",
+            "script": "tasks/git_pull_all.py", "description": "Pull tất cả repo trong một thư mục",
+            "params": [
+                {"name": "repos_dir", "label": "Thư mục chứa repos", "type": "folder", "default": "", "required": True},
+                {"name": "branch", "label": "Nhánh", "type": "text", "default": "main"},
+            ],
+        },
+        {
+            "id": "git_log_today", "label": "Git Log Hôm nay", "icon": "📋", "color": "#1976D2",
+            "script": "tasks/git_log_today.py", "description": "Xem commit hôm nay của toàn team",
+            "params": [
+                {"name": "repo_path", "label": "Thư mục repo", "type": "folder", "default": "", "required": True},
+                {"name": "author", "label": "Tác giả (để trống = tất cả)", "type": "text", "default": ""},
+            ],
+        },
+        {
+            "id": "create_release", "label": "Tạo Release Tag", "icon": "🏷", "color": "#0288D1",
+            "script": "tasks/create_release.py", "description": "Tạo git tag cho release mới",
+            "params": [
+                {"name": "repo_path", "label": "Thư mục repo", "type": "folder", "default": "", "required": True},
+                {"name": "version", "label": "Phiên bản (vd: v1.2.3)", "type": "text", "default": "", "required": True},
+                {"name": "message", "label": "Ghi chú release", "type": "text", "default": ""},
+            ],
+        },
+        {
+            "id": "generate_changelog", "label": "Tạo Changelog", "icon": "📝", "color": "#0097A7",
+            "script": "tasks/generate_changelog.py", "description": "Sinh changelog từ git log",
+            "params": [
+                {"name": "repo_path", "label": "Thư mục repo", "type": "folder", "default": "", "required": True},
+                {"name": "since_tag", "label": "Từ tag (để trống = tất cả)", "type": "text", "default": ""},
+                {"name": "output", "label": "File xuất", "type": "text", "default": "CHANGELOG.md"},
+            ],
+        },
+    ]),
+    ("🧪 Build & Kiểm thử", [
+        {
+            "id": "run_tests", "label": "Chạy Tests", "icon": "✓", "color": "#2E7D32",
+            "script": "tasks/run_tests.py", "description": "Chạy bộ kiểm thử tự động",
+            "params": [
+                {"name": "project_path", "label": "Thư mục dự án", "type": "folder", "default": "", "required": True},
+                {"name": "test_command", "label": "Lệnh test", "type": "text", "default": "pytest"},
+                {"name": "verbose", "label": "Chi tiết", "type": "boolean", "default": True},
+            ],
+        },
+        {
+            "id": "run_linter", "label": "Kiểm tra Code", "icon": "🔍", "color": "#388E3C",
+            "script": "tasks/run_linter.py", "description": "Chạy linter kiểm tra chất lượng code",
+            "params": [
+                {"name": "project_path", "label": "Thư mục dự án", "type": "folder", "default": "", "required": True},
+                {"name": "linter", "label": "Linter", "type": "choice",
+                 "options": ["flake8", "pylint", "eslint", "ruff"], "default": "flake8"},
+            ],
+        },
+        {
+            "id": "check_deps", "label": "Kiểm tra Dependencies", "icon": "📦", "color": "#43A047",
+            "script": "tasks/check_deps.py", "description": "Kiểm tra các gói phụ thuộc lỗi thời",
+            "params": [
+                {"name": "project_path", "label": "Thư mục dự án", "type": "folder", "default": "", "required": True},
+                {"name": "manager", "label": "Package manager", "type": "choice",
+                 "options": ["pip", "npm", "yarn", "pnpm"], "default": "pip"},
+            ],
+        },
+        {
+            "id": "clean_build", "label": "Dọn Build Cache", "icon": "🧹", "color": "#558B2F",
+            "script": "tasks/clean_build.py", "description": "Xóa thư mục build/dist/__pycache__",
+            "params": [
+                {"name": "project_path", "label": "Thư mục dự án", "type": "folder", "default": "", "required": True},
+                {"name": "dry_run", "label": "Chạy thử (không xóa thật)", "type": "boolean", "default": True},
+            ],
+        },
+    ]),
+    ("🚀 Deploy & Hạ tầng", [
+        {
+            "id": "deploy_script", "label": "Deploy", "icon": "🚀", "color": "#E65100",
+            "script": "tasks/deploy.py", "description": "Triển khai ứng dụng lên server",
+            "params": [
+                {"name": "environment", "label": "Môi trường", "type": "choice",
+                 "options": ["staging", "production", "dev"], "default": "staging", "required": True},
+                {"name": "version", "label": "Phiên bản / branch", "type": "text", "default": "main"},
+                {"name": "confirm", "label": "Xác nhận trước khi chạy", "type": "boolean", "default": True},
+            ],
+        },
+        {
+            "id": "check_api_health", "label": "Kiểm tra API", "icon": "💓", "color": "#C62828",
+            "script": "tasks/check_api_health.py", "description": "Kiểm tra trạng thái các API endpoint",
+            "params": [
+                {"name": "url", "label": "URL endpoint", "type": "text",
+                 "default": "http://localhost:8000/health", "required": True},
+                {"name": "expected_status", "label": "HTTP status mong đợi", "type": "number", "default": 200},
+                {"name": "timeout", "label": "Timeout (giây)", "type": "number", "default": 10},
+            ],
+        },
+        {
+            "id": "docker_status", "label": "Docker Status", "icon": "🐳", "color": "#0277BD",
+            "script": "tasks/docker_status.py", "description": "Liệt kê trạng thái container Docker",
+            "params": [
+                {"name": "show_all", "label": "Hiển thị cả container đã dừng", "type": "boolean", "default": False},
+            ],
+        },
+        {
+            "id": "backup_db", "label": "Backup Database", "icon": "🗄", "color": "#4527A0",
+            "script": "tasks/backup_db.py", "description": "Sao lưu cơ sở dữ liệu",
+            "params": [
+                {"name": "db_type", "label": "Loại database", "type": "choice",
+                 "options": ["postgresql", "mysql", "sqlite", "mongodb"], "default": "postgresql", "required": True},
+                {"name": "db_name", "label": "Tên database", "type": "text", "default": "", "required": True},
+                {"name": "output_path", "label": "Thư mục lưu backup", "type": "folder", "default": "", "required": True},
+            ],
+        },
+        {
+            "id": "backup", "label": "Backup Files", "icon": "⬆", "color": "#4CAF50",
+            "script": "tasks/backup.py", "description": "Sao lưu thư mục",
+            "params": [
+                {"name": "source", "label": "Thư mục nguồn", "type": "folder", "default": "", "required": True},
+                {"name": "destination", "label": "Thư mục đích", "type": "folder", "default": "", "required": True},
+                {"name": "compress", "label": "Nén file", "type": "boolean", "default": True},
+            ],
+        },
+    ]),
+    ("📡 Mạng & Kết nối", [
+        {
+            "id": "ping", "label": "Ping Host", "icon": "◉", "color": "#FF9800",
+            "script": "tasks/ping_host.py", "description": "Kiểm tra kết nối mạng",
+            "params": [
+                {"name": "host", "label": "Host / IP", "type": "text", "default": "google.com", "required": True},
+                {"name": "count", "label": "Số lần ping", "type": "number", "default": 4},
+            ],
+        },
+        {
+            "id": "open_ssh", "label": "Kết nối SSH", "icon": "🖥", "color": "#37474F",
+            "script": "tasks/open_ssh.py", "description": "Mở kết nối SSH đến server",
+            "params": [
+                {"name": "host", "label": "Host / IP", "type": "text", "default": "", "required": True},
+                {"name": "user", "label": "Username", "type": "text", "default": "root"},
+                {"name": "port", "label": "Cổng SSH", "type": "number", "default": 22},
+                {"name": "key_file", "label": "File SSH key (để trống = dùng mật khẩu)", "type": "file", "default": ""},
+            ],
+        },
+        {
+            "id": "http_request", "label": "HTTP Request", "icon": "🌐", "color": "#00838F",
+            "script": "tasks/http_request.py", "description": "Gửi HTTP request test API",
+            "params": [
+                {"name": "url", "label": "URL", "type": "text", "default": "", "required": True},
+                {"name": "method", "label": "Method", "type": "choice",
+                 "options": ["GET", "POST", "PUT", "DELETE", "PATCH"], "default": "GET"},
+                {"name": "headers", "label": "Headers (JSON)", "type": "text", "default": "{}"},
+                {"name": "body", "label": "Body (JSON, chỉ POST/PUT)", "type": "text", "default": ""},
+            ],
+        },
+    ]),
+    ("📊 Báo cáo & Giao tiếp", [
+        {
+            "id": "standup_report", "label": "Báo cáo Standup", "icon": "📊", "color": "#7B1FA2",
+            "script": "tasks/standup_report.py",
+            "description": "Tổng hợp commit hôm nay của team",
+            "params": [
+                {"name": "repos_dir", "label": "Thư mục chứa repos", "type": "folder", "default": "", "required": True},
+                {"name": "output_format", "label": "Định dạng xuất", "type": "choice",
+                 "options": ["text", "markdown", "html"], "default": "markdown"},
+            ],
+        },
+        {
+            "id": "send_slack", "label": "Gửi Slack", "icon": "📢", "color": "#6A1B9A",
+            "script": "tasks/send_slack.py", "description": "Gửi thông báo đến kênh Slack",
+            "params": [
+                {"name": "webhook_url", "label": "Webhook URL", "type": "text", "default": "", "required": True},
+                {"name": "message", "label": "Nội dung", "type": "text", "default": "", "required": True},
+                {"name": "username", "label": "Tên hiển thị", "type": "text", "default": "Dashboard Bot"},
+            ],
+        },
+        {
+            "id": "env_check", "label": "Kiểm tra .env", "icon": "⚙", "color": "#546E7A",
+            "script": "tasks/env_check.py", "description": "So sánh .env với .env.example",
+            "params": [
+                {"name": "project_path", "label": "Thư mục dự án", "type": "folder", "default": "", "required": True},
+            ],
+        },
+    ]),
+    ("🗂 File & Dữ liệu", [
+        {
+            "id": "rename", "label": "Rename Files", "icon": "✎", "color": "#9C27B0",
+            "script": "tasks/rename_files.py", "description": "Đổi tên hàng loạt file",
+            "params": [
+                {"name": "folder", "label": "Thư mục", "type": "folder", "default": "", "required": True},
+                {"name": "pattern", "label": "Pattern (regex)", "type": "text", "default": ".*"},
+                {"name": "prefix", "label": "Tiền tố", "type": "text", "default": ""},
+                {"name": "dry_run", "label": "Chạy thử", "type": "boolean", "default": True},
+            ],
+        },
+        {
+            "id": "find_large_files", "label": "Tìm file lớn", "icon": "🔎", "color": "#795548",
+            "script": "tasks/find_large_files.py", "description": "Tìm các file chiếm dung lượng lớn",
+            "params": [
+                {"name": "directory", "label": "Thư mục", "type": "folder", "default": "", "required": True},
+                {"name": "min_size_mb", "label": "Kích thước tối thiểu (MB)", "type": "number", "default": 100},
+                {"name": "top_n", "label": "Số lượng hiển thị", "type": "number", "default": 20},
+            ],
+        },
+        {
+            "id": "compare_folders", "label": "So sánh thư mục", "icon": "⚖", "color": "#4E342E",
+            "script": "tasks/compare_folders.py", "description": "So sánh nội dung hai thư mục",
+            "params": [
+                {"name": "folder_a", "label": "Thư mục A", "type": "folder", "default": "", "required": True},
+                {"name": "folder_b", "label": "Thư mục B", "type": "folder", "default": "", "required": True},
+                {"name": "show_same", "label": "Hiển thị file giống nhau", "type": "boolean", "default": False},
+            ],
+        },
+    ]),
+]
+
 ICON_GROUPS = {
     "Phổ biến":      ["★", "☆", "◉", "▶", "⬆", "⬇", "✎", "☰", "⚙", "💡", "🚀", "🎯"],
     "Tệp & Dữ liệu": ["📁", "📂", "💾", "📄", "📝", "📋", "📊", "📈", "🗂", "🗃", "📀"],
@@ -903,6 +1152,179 @@ class ProfileDialog(QDialog):
         self.accept()
 
 
+# ─── Task Library Dialog ──────────────────────────────────────────────────────
+
+class TaskLibraryDialog(QDialog):
+    def __init__(self, parent, existing_ids=None):
+        super().__init__(parent)
+        self.result = []
+        self._existing_ids = existing_ids or set()
+        self._checkboxes = {}  # id -> (QCheckBox, task_cfg)
+        self.setWindowTitle("Thư viện tác vụ")
+        self.resize(520, 520)
+        self.setStyleSheet("background-color: #1e1e2e; color: white;")
+        self._build_ui()
+
+    def _build_ui(self):
+        ml = QVBoxLayout(self)
+        ml.setContentsMargins(0, 0, 0, 0)
+        ml.setSpacing(0)
+
+        # Header
+        header = QWidget()
+        header.setFixedHeight(52)
+        header.setStyleSheet("background-color: #1565C0;")
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(16, 0, 16, 0)
+        tl = QLabel("📚  Thư viện tác vụ")
+        tl.setFont(QFont("Segoe UI", 13, QFont.Bold))
+        tl.setStyleSheet("color: white; background: transparent;")
+        hl.addWidget(tl)
+        ml.addWidget(header)
+
+        # Scroll
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: #1e1e2e; }")
+        content = QWidget()
+        content.setStyleSheet("background-color: #1e1e2e;")
+        cl = QVBoxLayout(content)
+        cl.setContentsMargins(16, 12, 16, 12)
+        cl.setSpacing(6)
+
+        # Select all
+        self._select_all = QCheckBox("Chọn tất cả")
+        self._select_all.setTristate(True)
+        self._select_all.setStyleSheet(
+            "QCheckBox { color: #888; background: transparent; font: 9pt 'Segoe UI'; }")
+        self._select_all.clicked.connect(self._toggle_all)
+        cl.addWidget(self._select_all)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet("background-color: #2a2a2a; max-height: 1px;")
+        cl.addWidget(sep)
+
+        for category_name, tasks in LIBRARY_CATEGORIES:
+            # Category header
+            cat_lbl = QLabel(category_name)
+            cat_lbl.setFont(QFont("Segoe UI", 9, QFont.Bold))
+            cat_lbl.setStyleSheet(
+                "color: #aaa; background: #252535; border-radius: 3px; padding: 4px 8px;")
+            cl.addWidget(cat_lbl)
+
+            for task in tasks:
+                tid = task.get("id", task["label"])
+                already = tid in self._existing_ids
+                color = task.get("color", "#444")
+
+                row_w = QWidget()
+                row_w.setStyleSheet("background-color: #232334; border-radius: 5px;")
+                rl = QHBoxLayout(row_w)
+                rl.setContentsMargins(10, 8, 12, 8)
+                rl.setSpacing(10)
+
+                chk = QCheckBox()
+                chk.setStyleSheet("QCheckBox { background: transparent; }")
+                chk.stateChanged.connect(self._update_btn_label)
+                rl.addWidget(chk)
+
+                badge = QLabel(task.get("icon", ""))
+                badge.setFont(QFont("Segoe UI", 16))
+                badge.setFixedSize(36, 36)
+                badge.setAlignment(Qt.AlignCenter)
+                badge.setStyleSheet(f"background-color: {color}; border-radius: 4px; color: white;")
+                rl.addWidget(badge)
+
+                info = QWidget()
+                info.setStyleSheet("background: transparent;")
+                il = QVBoxLayout(info)
+                il.setContentsMargins(0, 0, 0, 0)
+                il.setSpacing(1)
+
+                nl = QLabel(task["label"])
+                nl.setFont(QFont("Segoe UI", 10, QFont.Bold))
+                nl.setStyleSheet("color: white; background: transparent;")
+                il.addWidget(nl)
+
+                if task.get("description"):
+                    dl = QLabel(task["description"])
+                    dl.setFont(QFont("Segoe UI", 8))
+                    dl.setStyleSheet("color: #777; background: transparent;")
+                    il.addWidget(dl)
+
+                meta = []
+                if task.get("params"):
+                    meta.append(f"{len(task['params'])} tham số")
+                if task.get("script"):
+                    meta.append(task["script"])
+                if meta:
+                    ml2 = QLabel("  ·  ".join(meta))
+                    ml2.setFont(QFont("Segoe UI", 7))
+                    ml2.setStyleSheet("color: #4a4a6a; background: transparent;")
+                    il.addWidget(ml2)
+
+                rl.addWidget(info, 1)
+
+                if already:
+                    al = QLabel("✓ Đã có")
+                    al.setFont(QFont("Segoe UI", 8))
+                    al.setStyleSheet("color: #6bff8e; background: transparent;")
+                    rl.addWidget(al)
+
+                cl.addWidget(row_w)
+                self._checkboxes[tid] = (chk, task)
+
+        cl.addStretch()
+        scroll.setWidget(content)
+        ml.addWidget(scroll, 1)
+
+        # Button bar
+        bb = QWidget()
+        bb.setFixedHeight(56)
+        bb.setStyleSheet("background-color: #13131f; border-top: 1px solid #2a2a2a;")
+        bbl = QHBoxLayout(bb)
+        bbl.setContentsMargins(16, 0, 16, 0)
+        bbl.addStretch()
+
+        self._add_btn = QPushButton("Thêm vào profile")
+        self._add_btn.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        self._add_btn.setStyleSheet(BTN_BLUE)
+        self._add_btn.setEnabled(False)
+        self._add_btn.clicked.connect(self._submit)
+
+        cancel = QPushButton("Hủy")
+        cancel.setStyleSheet(BTN_DARK)
+        cancel.clicked.connect(self.reject)
+
+        bbl.addWidget(self._add_btn)
+        bbl.addWidget(cancel)
+        ml.addWidget(bb)
+
+    def _toggle_all(self):
+        checked = self._select_all.checkState() == Qt.Checked
+        for chk, _ in self._checkboxes.values():
+            chk.blockSignals(True)
+            chk.setChecked(checked)
+            chk.blockSignals(False)
+        self._update_btn_label()
+
+    def _update_btn_label(self):
+        count = sum(1 for chk, _ in self._checkboxes.values() if chk.isChecked())
+        total = len(self._checkboxes)
+        self._add_btn.setEnabled(count > 0)
+        self._add_btn.setText(f"Thêm {count} tác vụ" if count else "Thêm vào profile")
+        self._select_all.blockSignals(True)
+        self._select_all.setCheckState(
+            Qt.Checked if count == total else Qt.PartiallyChecked if count else Qt.Unchecked)
+        self._select_all.blockSignals(False)
+
+    def _submit(self):
+        self.result = [copy.deepcopy(task)
+                       for chk, task in self._checkboxes.values() if chk.isChecked()]
+        self.accept()
+
+
 # ─── Card Button Widget ────────────────────────────────────────────────────────
 
 class CardButton(QWidget):
@@ -1091,6 +1513,18 @@ class Dashboard(QMainWindow):
 
         bl.addSpacing(8)
 
+        self._ontop = False
+        self.ontop_btn = QPushButton("📌")
+        self.ontop_btn.setFixedSize(30, 30)
+        self.ontop_btn.setToolTip("Ghim cửa sổ luôn ở trên cùng")
+        self.ontop_btn.setCursor(Qt.PointingHandCursor)
+        self.ontop_btn.setStyleSheet(
+            "QPushButton { background-color: transparent; color: #555; border: none; border-radius: 4px; font: 14pt 'Segoe UI'; }"
+            " QPushButton:hover { background-color: #2a2a3e; color: #aaa; }"
+        )
+        self.ontop_btn.clicked.connect(self._toggle_on_top)
+        bl.addWidget(self.ontop_btn)
+
         add_btn = QPushButton("＋  Thêm tác vụ")
         add_btn.setFont(QFont("Segoe UI", 9))
         add_btn.setCursor(Qt.PointingHandCursor)
@@ -1147,6 +1581,7 @@ class Dashboard(QMainWindow):
         menu.addAction("✎  Đổi tên hồ sơ hiện tại", self._rename_profile)
         menu.addAction("✕  Xóa hồ sơ hiện tại", self._delete_profile)
         menu.addSeparator()
+        menu.addAction("📚  Thêm từ thư viện tác vụ", self._add_from_library)
         menu.addAction("↺  Khôi phục tác vụ mặc định", self._restore_defaults)
         menu.exec_(QCursor.pos())
 
@@ -1207,6 +1642,15 @@ class Dashboard(QMainWindow):
         self._rebuild_grid()
         self.status_bar.showMessage(f"Đã xóa hồ sơ: {name}")
 
+    def _add_from_library(self):
+        existing_ids = {b.get("id") for b in self.current_profile["buttons"]}
+        dlg = TaskLibraryDialog(self, existing_ids)
+        if dlg.exec_() == QDialog.Accepted and dlg.result:
+            self.current_profile["buttons"].extend(dlg.result)
+            save_config(self.config_data)
+            self._rebuild_grid()
+            self.status_bar.showMessage(f"Đã thêm {len(dlg.result)} tác vụ từ thư viện.")
+
     def _restore_defaults(self):
         name = self.current_profile["name"]
         reply = QMessageBox.question(
@@ -1221,6 +1665,25 @@ class Dashboard(QMainWindow):
             self.status_bar.showMessage("Đã khôi phục danh sách tác vụ mặc định.")
 
     # ── Grid ──────────────────────────────────────────────────────────────────
+
+    def _toggle_on_top(self):
+        self._ontop = not self._ontop
+        flags = self.windowFlags()
+        if self._ontop:
+            self.setWindowFlags(flags | Qt.WindowStaysOnTopHint)
+            self.ontop_btn.setStyleSheet(
+                "QPushButton { background-color: #2a3a5e; color: #7eb8f7; border: none; border-radius: 4px; font: 14pt 'Segoe UI'; }"
+                " QPushButton:hover { background-color: #3a4a6e; }"
+            )
+            self.ontop_btn.setToolTip("Bỏ ghim cửa sổ")
+        else:
+            self.setWindowFlags(flags & ~Qt.WindowStaysOnTopHint)
+            self.ontop_btn.setStyleSheet(
+                "QPushButton { background-color: transparent; color: #555; border: none; border-radius: 4px; font: 14pt 'Segoe UI'; }"
+                " QPushButton:hover { background-color: #2a2a3e; color: #aaa; }"
+            )
+            self.ontop_btn.setToolTip("Ghim cửa sổ luôn ở trên cùng")
+        self.show()
 
     def _rebuild_grid(self):
         prof = self.current_profile
