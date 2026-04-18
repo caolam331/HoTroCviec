@@ -1,0 +1,273 @@
+{
+  "active_profile": "999",
+  "profiles": [
+    {
+      "name": "Mặc định",
+      "title": "Task Dashboard",
+      "columns": 3,
+      "buttons": [
+        {
+          "id": "hello",
+          "label": "Hello World",
+          "icon": "★",
+          "color": "#2196F3",
+          "script": "tasks/hello.py",
+          "description": "In ra lời chào",
+          "params": [
+            {
+              "name": "name",
+              "label": "Tên của bạn",
+              "type": "text",
+              "default": "World",
+              "required": true
+            },
+            {
+              "name": "greet",
+              "label": "Kiểu chào",
+              "type": "choice",
+              "options": [
+                "Hello",
+                "Hi",
+                "Hey",
+                "Xin chào"
+              ],
+              "default": "Hello"
+            }
+          ]
+        },
+        {
+          "id": "backup",
+          "label": "Backup Files",
+          "icon": "⬆",
+          "color": "#4CAF50",
+          "script": "tasks/backup.py",
+          "description": "Sao lưu thư mục",
+          "params": [
+            {
+              "name": "source",
+              "label": "Thư mục nguồn",
+              "type": "folder",
+              "default": "",
+              "required": true
+            },
+            {
+              "name": "destination",
+              "label": "Thư mục đích",
+              "type": "folder",
+              "default": "",
+              "required": true
+            },
+            {
+              "name": "compress",
+              "label": "Nén file",
+              "type": "boolean",
+              "default": true
+            }
+          ]
+        },
+        {
+          "id": "ping",
+          "label": "Ping Host",
+          "icon": "◉",
+          "color": "#FF9800",
+          "script": "tasks/ping_host.py",
+          "description": "Kiểm tra kết nối mạng",
+          "params": [
+            {
+              "name": "host",
+              "label": "Host / IP",
+              "type": "text",
+              "default": "google.com",
+              "required": true
+            },
+            {
+              "name": "count",
+              "label": "Số lần ping",
+              "type": "number",
+              "default": 4
+            }
+          ]
+        },
+        {
+          "id": "rename",
+          "label": "Rename Files",
+          "icon": "✎",
+          "color": "#9C27B0",
+          "script": "tasks/rename_files.py",
+          "description": "Đổi tên hàng loạt file",
+          "params": [
+            {
+              "name": "folder",
+              "label": "Thư mục",
+              "type": "folder",
+              "default": "",
+              "required": true
+            },
+            {
+              "name": "pattern",
+              "label": "Pattern (regex)",
+              "type": "text",
+              "default": ".*"
+            },
+            {
+              "name": "prefix",
+              "label": "Tiền tố",
+              "type": "text",
+              "default": ""
+            },
+            {
+              "name": "dry_run",
+              "label": "Chạy thử (không thay đổi)",
+              "type": "boolean",
+              "default": true
+            }
+          ]
+        },
+        {
+          "id": "sysinfo",
+          "label": "System Info",
+          "icon": "☰",
+          "color": "#607D8B",
+          "script": "tasks/sysinfo.py",
+          "description": "Thông tin hệ thống",
+          "params": []
+        },
+        {
+          "id": "countdown",
+          "label": "Countdown Timer",
+          "icon": "⏱",
+          "color": "#F44336",
+          "script": "tasks/countdown.py",
+          "description": "Hẹn giờ đếm ngược",
+          "params": [
+            {
+              "name": "seconds",
+              "label": "Số giây",
+              "type": "number",
+              "default": 10,
+              "required": true
+            },
+            {
+              "name": "message",
+              "label": "Thông báo khi xong",
+              "type": "text",
+              "default": "Done!"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "999",
+      "title": "Task Dashboard",
+      "columns": 3,
+      "buttons": [
+        {
+          "id": "hello",
+          "label": "Hello World",
+          "icon": "★",
+          "color": "#2196F3",
+          "script": "tasks/hello.py",
+          "description": "In ra lời chào",
+          "params": [
+            {
+              "name": "name",
+              "label": "Tên của bạn",
+              "type": "text",
+              "default": "World",
+              "required": true
+            },
+            {
+              "name": "greet",
+              "label": "Kiểu chào",
+              "type": "choice",
+              "options": [
+                "Hello",
+                "Hi",
+                "Hey",
+                "Xin chào"
+              ],
+              "default": "Hello"
+            }
+          ]
+        },
+        {
+          "id": "backup",
+          "label": "Backup Files",
+          "icon": "⬆",
+          "color": "#4CAF50",
+          "script": "tasks/backup.py",
+          "description": "Sao lưu thư mục",
+          "params": [
+            {
+              "name": "source",
+              "label": "Thư mục nguồn",
+              "type": "folder",
+              "default": "",
+              "required": true
+            },
+            {
+              "name": "destination",
+              "label": "Thư mục đích",
+              "type": "folder",
+              "default": "",
+              "required": true
+            },
+            {
+              "name": "compress",
+              "label": "Nén file",
+              "type": "boolean",
+              "default": true
+            }
+          ]
+        },
+        {
+          "id": "ping",
+          "label": "Ping Host",
+          "icon": "◉",
+          "color": "#FF9800",
+          "script": "tasks/ping_host.py",
+          "description": "Kiểm tra kết nối mạng",
+          "params": [
+            {
+              "name": "host",
+              "label": "Host / IP",
+              "type": "text",
+              "default": "google.com",
+              "required": true
+            },
+            {
+              "name": "count",
+              "label": "Số lần ping",
+              "type": "number",
+              "default": 4
+            }
+          ]
+        },
+        {
+          "id": "countdown",
+          "label": "Countdown Timer",
+          "icon": "⏱",
+          "color": "#F44336",
+          "script": "tasks/countdown.py",
+          "description": "Hẹn giờ đếm ngược",
+          "params": [
+            {
+              "name": "seconds",
+              "label": "Số giây",
+              "type": "number",
+              "default": 10,
+              "required": true
+            },
+            {
+              "name": "message",
+              "label": "Thông báo khi xong",
+              "type": "text",
+              "default": "Done!"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
