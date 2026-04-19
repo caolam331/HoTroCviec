@@ -15,7 +15,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QObject, QEvent
 from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor, QCursor
 
-CONFIG_FILE = Path(__file__).parent / "config.json"
+CONFIG_FILE  = Path(__file__).parent / "config.json"
+LIBRARY_FILE = Path(__file__).parent / "library.json"
 
 # ─── Defaults ─────────────────────────────────────────────────────────────────
 
@@ -317,6 +318,22 @@ LIBRARY_CATEGORIES = [
             ],
         },
     ]),
+    ("🌐 Tiện ích", [
+        {
+            "id": "translate_clip", "label": "Dịch Clipboard", "icon": "🌐", "color": "#00796B",
+            "script": "tasks/translate_clip.py",
+            "description": "Dịch văn bản từ clipboard sang tiếng Việt",
+            "params": [
+                {"name": "source_lang", "label": "Ngôn ngữ nguồn", "type": "choice",
+                 "options": ["auto", "en", "ja", "ko", "zh", "fr", "de", "es"],
+                 "default": "auto"},
+                {"name": "target_lang", "label": "Ngôn ngữ đích", "type": "choice",
+                 "options": ["vi", "en", "ja", "ko", "zh", "fr", "de"],
+                 "default": "vi"},
+                {"name": "copy_result", "label": "Sao chép kết quả vào clipboard", "type": "boolean", "default": True},
+            ],
+        },
+    ]),
 ]
 
 ICON_GROUPS = {
@@ -359,6 +376,21 @@ def load_config():
 
 def save_config(data):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def load_library():
+    if LIBRARY_FILE.exists():
+        try:
+            with open(LIBRARY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return [{"name": n, "tasks": list(t)} for n, t in LIBRARY_CATEGORIES]
+
+
+def save_library(data):
+    with open(LIBRARY_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
@@ -1159,9 +1191,12 @@ class TaskLibraryDialog(QDialog):
         super().__init__(parent)
         self.result = []
         self._existing_ids = existing_ids or set()
-        self._checkboxes = {}  # id -> (QCheckBox, task_cfg)
+        self._checkboxes = {}    # id -> (QCheckBox, task_cfg)
+        self._rows = []          # (row_widget, chk, task_cfg, cat_name)
+        self._cat_headers = {}   # cat_name -> [header_widget, ...]
+        self._library = load_library()
         self.setWindowTitle("Thư viện tác vụ")
-        self.resize(520, 520)
+        self.resize(560, 580)
         self.setStyleSheet("background-color: #1e1e2e; color: white;")
         self._build_ui()
 
@@ -1182,101 +1217,60 @@ class TaskLibraryDialog(QDialog):
         hl.addWidget(tl)
         ml.addWidget(header)
 
-        # Scroll
+        # Search + add-to-library bar
+        search_bar = QWidget()
+        search_bar.setStyleSheet("background-color: #1a1a2e;")
+        sl = QHBoxLayout(search_bar)
+        sl.setContentsMargins(12, 8, 12, 8)
+        sl.setSpacing(8)
+
+        self._search = QLineEdit()
+        self._search.setPlaceholderText("🔍  Tìm kiếm tác vụ…")
+        self._search.setStyleSheet(
+            "QLineEdit { background-color: #252535; color: white; border: none;"
+            " border-radius: 4px; padding: 6px 10px; font: 10pt 'Segoe UI'; }"
+        )
+        self._search.textChanged.connect(self._filter_rows)
+        sl.addWidget(self._search, 1)
+
+        add_lib_btn = QPushButton("＋  Thêm vào thư viện")
+        add_lib_btn.setFont(QFont("Segoe UI", 9))
+        add_lib_btn.setCursor(Qt.PointingHandCursor)
+        add_lib_btn.setStyleSheet(
+            "QPushButton { background-color: #2a3a2a; color: #6bff8e; border: none;"
+            " padding: 6px 12px; border-radius: 4px; }"
+            " QPushButton:hover { background-color: #3a4a3a; }"
+        )
+        add_lib_btn.clicked.connect(self._add_to_library)
+        sl.addWidget(add_lib_btn)
+        ml.addWidget(search_bar)
+
+        # Scroll area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; background-color: #1e1e2e; }")
-        content = QWidget()
-        content.setStyleSheet("background-color: #1e1e2e;")
-        cl = QVBoxLayout(content)
-        cl.setContentsMargins(16, 12, 16, 12)
-        cl.setSpacing(6)
+        self._content_w = QWidget()
+        self._content_w.setStyleSheet("background-color: #1e1e2e;")
+        self._cl = QVBoxLayout(self._content_w)
+        self._cl.setContentsMargins(16, 12, 16, 12)
+        self._cl.setSpacing(6)
 
-        # Select all
         self._select_all = QCheckBox("Chọn tất cả")
         self._select_all.setTristate(True)
         self._select_all.setStyleSheet(
             "QCheckBox { color: #888; background: transparent; font: 9pt 'Segoe UI'; }")
         self._select_all.clicked.connect(self._toggle_all)
-        cl.addWidget(self._select_all)
+        self._cl.addWidget(self._select_all)
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setStyleSheet("background-color: #2a2a2a; max-height: 1px;")
-        cl.addWidget(sep)
+        self._cl.addWidget(sep)
 
-        for category_name, tasks in LIBRARY_CATEGORIES:
-            # Category header
-            cat_lbl = QLabel(category_name)
-            cat_lbl.setFont(QFont("Segoe UI", 9, QFont.Bold))
-            cat_lbl.setStyleSheet(
-                "color: #aaa; background: #252535; border-radius: 3px; padding: 4px 8px;")
-            cl.addWidget(cat_lbl)
+        self._populate_list()
+        self._cl.addStretch()
 
-            for task in tasks:
-                tid = task.get("id", task["label"])
-                already = tid in self._existing_ids
-                color = task.get("color", "#444")
-
-                row_w = QWidget()
-                row_w.setStyleSheet("background-color: #232334; border-radius: 5px;")
-                rl = QHBoxLayout(row_w)
-                rl.setContentsMargins(10, 8, 12, 8)
-                rl.setSpacing(10)
-
-                chk = QCheckBox()
-                chk.setStyleSheet("QCheckBox { background: transparent; }")
-                chk.stateChanged.connect(self._update_btn_label)
-                rl.addWidget(chk)
-
-                badge = QLabel(task.get("icon", ""))
-                badge.setFont(QFont("Segoe UI", 16))
-                badge.setFixedSize(36, 36)
-                badge.setAlignment(Qt.AlignCenter)
-                badge.setStyleSheet(f"background-color: {color}; border-radius: 4px; color: white;")
-                rl.addWidget(badge)
-
-                info = QWidget()
-                info.setStyleSheet("background: transparent;")
-                il = QVBoxLayout(info)
-                il.setContentsMargins(0, 0, 0, 0)
-                il.setSpacing(1)
-
-                nl = QLabel(task["label"])
-                nl.setFont(QFont("Segoe UI", 10, QFont.Bold))
-                nl.setStyleSheet("color: white; background: transparent;")
-                il.addWidget(nl)
-
-                if task.get("description"):
-                    dl = QLabel(task["description"])
-                    dl.setFont(QFont("Segoe UI", 8))
-                    dl.setStyleSheet("color: #777; background: transparent;")
-                    il.addWidget(dl)
-
-                meta = []
-                if task.get("params"):
-                    meta.append(f"{len(task['params'])} tham số")
-                if task.get("script"):
-                    meta.append(task["script"])
-                if meta:
-                    ml2 = QLabel("  ·  ".join(meta))
-                    ml2.setFont(QFont("Segoe UI", 7))
-                    ml2.setStyleSheet("color: #4a4a6a; background: transparent;")
-                    il.addWidget(ml2)
-
-                rl.addWidget(info, 1)
-
-                if already:
-                    al = QLabel("✓ Đã có")
-                    al.setFont(QFont("Segoe UI", 8))
-                    al.setStyleSheet("color: #6bff8e; background: transparent;")
-                    rl.addWidget(al)
-
-                cl.addWidget(row_w)
-                self._checkboxes[tid] = (chk, task)
-
-        cl.addStretch()
-        scroll.setWidget(content)
+        scroll.setWidget(self._content_w)
         ml.addWidget(scroll, 1)
 
         # Button bar
@@ -1301,6 +1295,185 @@ class TaskLibraryDialog(QDialog):
         bbl.addWidget(cancel)
         ml.addWidget(bb)
 
+    def _populate_list(self):
+        self._rows.clear()
+        self._cat_headers.clear()
+        self._checkboxes.clear()
+
+        for cat in self._library:
+            cat_name = cat["name"]
+            tasks = cat.get("tasks", [])
+
+            cat_lbl = QLabel(cat_name)
+            cat_lbl.setFont(QFont("Segoe UI", 9, QFont.Bold))
+            cat_lbl.setStyleSheet(
+                "color: #aaa; background: #252535; border-radius: 3px; padding: 4px 8px;")
+            self._cl.addWidget(cat_lbl)
+            self._cat_headers[cat_name] = [cat_lbl]
+
+            for task in tasks:
+                row_w = self._make_task_row(task, cat_name)
+                self._cl.addWidget(row_w)
+
+    def _make_task_row(self, task, cat_name):
+        tid = task.get("id", task["label"])
+        already = tid in self._existing_ids
+        color = task.get("color", "#444")
+
+        row_w = QWidget()
+        row_w.setStyleSheet("background-color: #232334; border-radius: 5px;")
+        rl = QHBoxLayout(row_w)
+        rl.setContentsMargins(10, 8, 8, 8)
+        rl.setSpacing(10)
+
+        chk = QCheckBox()
+        chk.setStyleSheet("QCheckBox { background: transparent; }")
+        chk.stateChanged.connect(self._update_btn_label)
+        rl.addWidget(chk)
+
+        badge = QLabel(task.get("icon", ""))
+        badge.setFont(QFont("Segoe UI", 16))
+        badge.setFixedSize(36, 36)
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setStyleSheet(f"background-color: {color}; border-radius: 4px; color: white;")
+        rl.addWidget(badge)
+
+        info = QWidget()
+        info.setStyleSheet("background: transparent;")
+        il = QVBoxLayout(info)
+        il.setContentsMargins(0, 0, 0, 0)
+        il.setSpacing(1)
+
+        nl = QLabel(task["label"])
+        nl.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        nl.setStyleSheet("color: white; background: transparent;")
+        il.addWidget(nl)
+
+        if task.get("description"):
+            dl = QLabel(task["description"])
+            dl.setFont(QFont("Segoe UI", 8))
+            dl.setStyleSheet("color: #777; background: transparent;")
+            il.addWidget(dl)
+
+        meta = []
+        if task.get("params"):
+            meta.append(f"{len(task['params'])} tham số")
+        if task.get("script"):
+            meta.append(task["script"])
+        if meta:
+            ml2 = QLabel("  ·  ".join(meta))
+            ml2.setFont(QFont("Segoe UI", 7))
+            ml2.setStyleSheet("color: #4a4a6a; background: transparent;")
+            il.addWidget(ml2)
+
+        rl.addWidget(info, 1)
+
+        if already:
+            al = QLabel("✓ Đã có")
+            al.setFont(QFont("Segoe UI", 8))
+            al.setStyleSheet("color: #6bff8e; background: transparent;")
+            rl.addWidget(al)
+
+        crud_style = (
+            "QPushButton {{ background: transparent; color: #555; border: none;"
+            " border-radius: 3px; font: bold 10pt 'Segoe UI'; padding: 1px 3px; }}"
+            " QPushButton:hover {{ background: rgba(255,255,255,15); color: {c}; }}"
+        )
+        edit_b = QPushButton("✎")
+        edit_b.setFixedSize(22, 22)
+        edit_b.setToolTip("Sửa tác vụ trong thư viện")
+        edit_b.setCursor(Qt.PointingHandCursor)
+        edit_b.setStyleSheet(crud_style.format(c="#aaa"))
+        edit_b.clicked.connect(lambda _, t=task, c=cat_name: self._edit_library_task(t, c))
+        rl.addWidget(edit_b)
+
+        del_b = QPushButton("✕")
+        del_b.setFixedSize(22, 22)
+        del_b.setToolTip("Xóa khỏi thư viện")
+        del_b.setCursor(Qt.PointingHandCursor)
+        del_b.setStyleSheet(crud_style.format(c="#ff6666"))
+        del_b.clicked.connect(lambda _, t=task, c=cat_name: self._delete_library_task(t, c))
+        rl.addWidget(del_b)
+
+        self._rows.append((row_w, chk, task, cat_name))
+        self._checkboxes[tid] = (chk, task)
+        return row_w
+
+    def _rebuild_list(self):
+        while self._cl.count() > 2:
+            item = self._cl.takeAt(2)
+            if item and item.widget():
+                item.widget().deleteLater()
+        self._populate_list()
+        self._cl.addStretch()
+        self._update_btn_label()
+        q = self._search.text()
+        if q:
+            self._filter_rows(q)
+
+    def _filter_rows(self, text):
+        q = text.lower().strip()
+        visible_cats = set()
+        for row_w, chk, task, cat_name in self._rows:
+            match = (not q
+                     or q in task["label"].lower()
+                     or q in task.get("description", "").lower()
+                     or q in task.get("script", "").lower())
+            row_w.setVisible(match)
+            if match:
+                visible_cats.add(cat_name)
+        for cat_name, widgets in self._cat_headers.items():
+            show = not q or cat_name in visible_cats
+            for w in widgets:
+                w.setVisible(show)
+
+    def _add_to_library(self):
+        dlg = TaskEditorDialog(self)
+        if dlg.exec_() != QDialog.Accepted or not dlg.result:
+            return
+        task = dlg.result
+        cat_name = "⭐ Tùy chỉnh"
+        cat = next((c for c in self._library if c["name"] == cat_name), None)
+        if cat is None:
+            cat = {"name": cat_name, "tasks": []}
+            self._library.append(cat)
+        cat["tasks"].append(task)
+        save_library(self._library)
+        self._rebuild_list()
+
+    def _edit_library_task(self, task, cat_name):
+        dlg = TaskEditorDialog(self, task)
+        if dlg.exec_() != QDialog.Accepted or not dlg.result:
+            return
+        for cat in self._library:
+            if cat["name"] == cat_name:
+                for i, t in enumerate(cat["tasks"]):
+                    if t.get("id") == task.get("id") and t.get("label") == task.get("label"):
+                        cat["tasks"][i] = dlg.result
+                        break
+                break
+        save_library(self._library)
+        self._rebuild_list()
+
+    def _delete_library_task(self, task, cat_name):
+        reply = QMessageBox.question(
+            self, "Xóa khỏi thư viện",
+            f"Xóa '{task['label']}' khỏi thư viện?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        for cat in self._library:
+            if cat["name"] == cat_name:
+                cat["tasks"] = [
+                    t for t in cat["tasks"]
+                    if not (t.get("id") == task.get("id") and t.get("label") == task.get("label"))
+                ]
+                break
+        self._library = [c for c in self._library if c["tasks"]]
+        save_library(self._library)
+        self._rebuild_list()
+
     def _toggle_all(self):
         checked = self._select_all.checkState() == Qt.Checked
         for chk, _ in self._checkboxes.values():
@@ -1310,13 +1483,23 @@ class TaskLibraryDialog(QDialog):
         self._update_btn_label()
 
     def _update_btn_label(self):
-        count = sum(1 for chk, _ in self._checkboxes.values() if chk.isChecked())
-        total = len(self._checkboxes)
+        visible_ids = {
+            task.get("id", task["label"])
+            for row_w, chk, task, _ in self._rows if row_w.isVisible()
+        }
+        count = sum(
+            1 for tid, (chk, _) in self._checkboxes.items()
+            if chk.isChecked() and tid in visible_ids
+        )
+        total = len(visible_ids)
         self._add_btn.setEnabled(count > 0)
         self._add_btn.setText(f"Thêm {count} tác vụ" if count else "Thêm vào profile")
         self._select_all.blockSignals(True)
         self._select_all.setCheckState(
-            Qt.Checked if count == total else Qt.PartiallyChecked if count else Qt.Unchecked)
+            Qt.Checked if count and count == total
+            else Qt.PartiallyChecked if count
+            else Qt.Unchecked
+        )
         self._select_all.blockSignals(False)
 
     def _submit(self):
@@ -1333,25 +1516,25 @@ class CardButton(QWidget):
     delete_requested = pyqtSignal()
     clone_requested = pyqtSignal()
 
-    def __init__(self, parent, cfg):
+    def __init__(self, parent, cfg, edit_mode=False):
         super().__init__(parent)
         self.base_color = cfg.get("color", "#444")
         self.hover_color = _lighten(self.base_color)
         self.setCursor(Qt.PointingHandCursor)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setAttribute(Qt.WA_Hover)
-        self._build_ui(cfg)
+        self._build_ui(cfg, edit_mode)
         self._set_color(self.base_color)
 
-    def _build_ui(self, cfg):
+    def _build_ui(self, cfg, edit_mode):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 14)
         layout.setSpacing(2)
 
-        # Toolbar — hidden until hover
+        # Toolbar — visible only when edit mode is active
         self._toolbar = QWidget()
         self._toolbar.setStyleSheet("background: transparent;")
-        self._toolbar.setVisible(False)
+        self._toolbar.setVisible(edit_mode)
         tbl = QHBoxLayout(self._toolbar)
         tbl.setContentsMargins(0, 0, 0, 0)
         tbl.setSpacing(3)
@@ -1421,10 +1604,8 @@ class CardButton(QWidget):
     def event(self, e):
         if e.type() == QEvent.HoverEnter:
             self._set_color(self.hover_color)
-            self._toolbar.setVisible(True)
         elif e.type() == QEvent.HoverLeave:
             self._set_color(self.base_color)
-            self._toolbar.setVisible(False)
         return super().event(e)
 
     def mousePressEvent(self, event):
@@ -1524,6 +1705,23 @@ class Dashboard(QMainWindow):
         )
         self.ontop_btn.clicked.connect(self._toggle_on_top)
         bl.addWidget(self.ontop_btn)
+
+        self._edit_mode = False
+        self._edit_btn = QPushButton("✏  Chỉnh sửa")
+        self._edit_btn.setFont(QFont("Segoe UI", 9))
+        self._edit_btn.setFixedHeight(30)
+        self._edit_btn.setCursor(Qt.PointingHandCursor)
+        self._edit_btn.setCheckable(True)
+        self._edit_btn.setToolTip("Bật/tắt chế độ chỉnh sửa tác vụ")
+        self._edit_btn.setStyleSheet(
+            "QPushButton { background-color: transparent; color: #888; border: 1px solid #333;"
+            " padding: 0 10px; border-radius: 4px; }"
+            " QPushButton:hover { background-color: #2a2a3e; color: #bbb; }"
+            " QPushButton:checked { background-color: #3a2a1e; color: #f7a97e;"
+            " border-color: #7a4a2e; }"
+        )
+        self._edit_btn.clicked.connect(self._toggle_edit_mode)
+        bl.addWidget(self._edit_btn)
 
         add_btn = QPushButton("＋  Thêm tác vụ")
         add_btn.setFont(QFont("Segoe UI", 9))
@@ -1666,6 +1864,14 @@ class Dashboard(QMainWindow):
 
     # ── Grid ──────────────────────────────────────────────────────────────────
 
+    def _toggle_edit_mode(self):
+        self._edit_mode = self._edit_btn.isChecked()
+        self._rebuild_grid()
+        if self._edit_mode:
+            self.status_bar.showMessage("Chế độ chỉnh sửa: BẬT — Nhấn lại để tắt")
+        else:
+            self.status_bar.showMessage("Sẵn sàng")
+
     def _toggle_on_top(self):
         self._ontop = not self._ontop
         flags = self.windowFlags()
@@ -1696,7 +1902,7 @@ class Dashboard(QMainWindow):
 
         for i, btn_cfg in enumerate(prof["buttons"]):
             row, col = divmod(i, cols)
-            card = CardButton(self.grid_widget, btn_cfg)
+            card = CardButton(self.grid_widget, btn_cfg, edit_mode=self._edit_mode)
             card.clicked.connect(lambda c=btn_cfg: self._handle_button(c))
             card.edit_requested.connect(lambda c=btn_cfg: self._edit_task(c))
             card.clone_requested.connect(lambda c=btn_cfg: self._clone_task(c))
@@ -1778,6 +1984,16 @@ class Dashboard(QMainWindow):
         label = cfg["label"]
         self.status_bar.showMessage(f"Đang chạy: {label}…")
 
+        if cfg.get("gui"):
+            subprocess.Popen(
+                cmd,
+                cwd=str(Path(__file__).parent),
+                env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            )
+            self.status_bar.showMessage(f"Đã mở: {label}")
+            return
+
         panel = OutputPanel(self, label)
         panel.show()
         panel.append(f"$ {' '.join(cmd)}\n\n", "success")
@@ -1793,6 +2009,7 @@ class Dashboard(QMainWindow):
                     text=True, encoding="utf-8", errors="replace",
                     cwd=str(Path(__file__).parent),
                     env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+                    creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
                 )
                 for line in proc.stdout:
                     signals.text_ready.emit(line, "")

@@ -7,112 +7,50 @@
       "columns": 3,
       "buttons": [
         {
-          "id": "git_log_today",
-          "label": "Git Log Hôm nay",
-          "icon": "📋",
-          "color": "#1976D2",
-          "script": "tasks/git_log_today.py",
-          "description": "Xem commit hôm nay của toàn team",
+          "id": "translate_clip",
+          "label": "Dịch Clipboard",
+          "icon": "🌐",
+          "color": "#00796B",
+          "script": "tasks/translate_clip.py",
+          "gui": true,
+          "description": "Dịch văn bản từ clipboard sang tiếng Việt",
           "params": [
             {
-              "name": "repo_path",
-              "label": "Thư mục repo",
-              "type": "folder",
-              "default": "",
-              "required": true
+              "name": "source_lang",
+              "label": "Ngôn ngữ nguồn",
+              "type": "choice",
+              "options": [
+                "auto",
+                "en",
+                "ja",
+                "ko",
+                "zh",
+                "fr",
+                "de",
+                "es"
+              ],
+              "default": "auto"
             },
             {
-              "name": "author",
-              "label": "Tác giả (để trống = tất cả)",
-              "type": "text",
-              "default": ""
-            }
-          ]
-        },
-        {
-          "id": "run_tests",
-          "label": "Chạy Tests",
-          "icon": "✓",
-          "color": "#2E7D32",
-          "script": "tasks/run_tests.py",
-          "description": "Chạy bộ kiểm thử tự động",
-          "params": [
-            {
-              "name": "project_path",
-              "label": "Thư mục dự án",
-              "type": "folder",
-              "default": "",
-              "required": true
+              "name": "target_lang",
+              "label": "Ngôn ngữ đích",
+              "type": "choice",
+              "options": [
+                "vi",
+                "en",
+                "ja",
+                "ko",
+                "zh",
+                "fr",
+                "de"
+              ],
+              "default": "vi"
             },
             {
-              "name": "test_command",
-              "label": "Lệnh test",
-              "type": "text",
-              "default": "pytest"
-            },
-            {
-              "name": "verbose",
-              "label": "Chi tiết",
+              "name": "copy_result",
+              "label": "Sao chép kết quả vào clipboard",
               "type": "boolean",
               "default": true
-            }
-          ]
-        },
-        {
-          "id": "run_linter",
-          "label": "Kiểm tra Code",
-          "icon": "🔍",
-          "color": "#388E3C",
-          "script": "tasks/run_linter.py",
-          "description": "Chạy linter kiểm tra chất lượng code",
-          "params": [
-            {
-              "name": "project_path",
-              "label": "Thư mục dự án",
-              "type": "folder",
-              "default": "",
-              "required": true
-            },
-            {
-              "name": "linter",
-              "label": "Linter",
-              "type": "choice",
-              "options": [
-                "flake8",
-                "pylint",
-                "eslint",
-                "ruff"
-              ],
-              "default": "flake8"
-            }
-          ]
-        },
-        {
-          "id": "check_deps",
-          "label": "Kiểm tra Dependencies",
-          "icon": "📦",
-          "color": "#43A047",
-          "script": "tasks/check_deps.py",
-          "description": "Kiểm tra các gói phụ thuộc lỗi thời",
-          "params": [
-            {
-              "name": "project_path",
-              "label": "Thư mục dự án",
-              "type": "folder",
-              "default": "",
-              "required": true
-            },
-            {
-              "name": "manager",
-              "label": "Package manager",
-              "type": "choice",
-              "options": [
-                "pip",
-                "npm",
-                "yarn",
-                "pnpm"
-              ],
-              "default": "pip"
             }
           ]
         }
