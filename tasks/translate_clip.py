@@ -1,8 +1,9 @@
 """
-Live Clipboard Translator
-Tự động dịch khi người dùng copy text vào clipboard.
+Live Clipboard Translator + Spell Checker
+Tự động dịch hoặc kiểm tra chính tả khi người dùng copy text vào clipboard.
 """
 import argparse
+import html as _html
 import json
 import sys
 import time
@@ -17,7 +18,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QStatusBar, QTextEdit, QVBoxLayout, QWidget,
 )
 
-# ── CLI args (tương thích với task runner của main.py) ────────────────────────
+# ── CLI args ──────────────────────────────────────────────────────────────────
 parser = argparse.ArgumentParser()
 parser.add_argument("--source_lang", default="auto")
 parser.add_argument("--target_lang", default="vi")
@@ -53,51 +54,6 @@ def google_translate(text: str, sl: str, tl: str) -> str:
     return "".join(seg[0] for seg in data[0] if seg[0])
 
 
-# ── Clipboard worker ───────────────────────────────────────────────────────────
-class ClipboardWatcher(QThread):
-    new_text = pyqtSignal(str)
-
-    def __init__(self, interval_ms: int = 400):
-        super().__init__()
-        self._interval = interval_ms / 1000
-        self._last = ""
-        self._running = True
-
-    def run(self):
-        while self._running:
-            try:
-                cb = QApplication.clipboard().text()
-                if cb and cb != self._last:
-                    self._last = cb
-                    self.new_text.emit(cb)
-            except Exception:
-                pass
-            time.sleep(self._interval)
-
-    def stop(self):
-        self._running = False
-
-
-class TranslateWorker(QThread):
-    done = pyqtSignal(str, str)   # (translation, detected_lang)
-    error = pyqtSignal(str)
-
-    def __init__(self, text: str, sl: str, tl: str):
-        super().__init__()
-        self.text = text
-        self.sl = sl
-        self.tl = tl
-
-    def run(self):
-        try:
-            result = google_translate(self.text, self.sl, self.tl)
-            self.done.emit(result, self.sl)
-        except urllib.error.URLError as e:
-            self.error.emit(f"Lỗi mạng: {e.reason}")
-        except Exception as e:
-            self.error.emit(str(e))
-
-
 # ── Styles ────────────────────────────────────────────────────────────────────
 DARK_BG    = "#1E1E2E"
 SURFACE    = "#2A2A3E"
@@ -108,6 +64,7 @@ TEXT_PRI   = "#CDD6F4"
 TEXT_SEC   = "#6C7086"
 SUCCESS    = "#A6E3A1"
 ERROR_CLR  = "#F38BA8"
+WARN_CLR   = "#FAB387"
 BORDER     = "#45475A"
 
 STYLE_SHEET = f"""
@@ -189,6 +146,168 @@ QStatusBar {{
 }}
 """
 
+# ── Spell check ────────────────────────────────────────────────────────────────
+REMOTE_SERVER = "https://api.languagetool.org"
+
+try:
+    import language_tool_python as _ltp
+    _spell_local: "_ltp.LanguageTool | None" = None
+    _spell_remote: "_ltp.LanguageTool | None" = None
+    HAS_SPELL = True
+
+    def get_spell_tool(remote: bool = False):
+        global _spell_local, _spell_remote
+        if remote:
+            if _spell_remote is None:
+                _spell_remote = _ltp.LanguageTool('en-US', remote_server=REMOTE_SERVER)
+            return _spell_remote
+        else:
+            if _spell_local is None:
+                _spell_local = _ltp.LanguageTool('en-US')
+            return _spell_local
+
+except ImportError:
+    HAS_SPELL = False
+
+    def get_spell_tool(remote: bool = False):  # noqa: ARG001
+        return None
+
+
+def build_highlighted_html(text: str, match_dicts: list) -> str:
+    """Build HTML with red-highlighted spelling/grammar errors from match dicts."""
+    parts = []
+    prev = 0
+    for m in sorted(match_dicts, key=lambda x: x["offset"]):
+        start = m["offset"]
+        end = start + m["errorLength"]
+        if start < prev or end > len(text):
+            continue
+        parts.append(_html.escape(text[prev:start]))
+        err = _html.escape(text[start:end])
+        tip = _html.escape(m["message"][:120])
+        replacement = m["replacements"][0] if m["replacements"] else ""
+        tip_full = f"{tip} → {_html.escape(replacement)}" if replacement else tip
+        parts.append(
+            f'<span style="background:{ERROR_CLR};color:#1E1E2E;border-radius:3px;'
+            f'padding:1px 3px;cursor:help" title="{tip_full}">{err}</span>'
+        )
+        prev = end
+    parts.append(_html.escape(text[prev:]))
+    body = "".join(parts).replace("\n", "<br>")
+    return (
+        f'<div style="font-family:\'Segoe UI\',Arial,sans-serif;font-size:14px;'
+        f'color:{TEXT_PRI};line-height:1.6">{body}</div>'
+    )
+
+
+# ── Workers ───────────────────────────────────────────────────────────────────
+class ClipboardWatcher(QThread):
+    new_text = pyqtSignal(str)
+
+    def __init__(self, interval_ms: int = 400):
+        super().__init__()
+        self._interval = interval_ms / 1000
+        self._last = ""
+        self._running = True
+
+    def run(self):
+        while self._running:
+            try:
+                cb = QApplication.clipboard().text()
+                if cb and cb != self._last:
+                    self._last = cb
+                    self.new_text.emit(cb)
+            except Exception:
+                pass
+            time.sleep(self._interval)
+
+    def stop(self):
+        self._running = False
+
+
+class TranslateWorker(QThread):
+    done = pyqtSignal(str, str)
+    error = pyqtSignal(str)
+
+    def __init__(self, text: str, sl: str, tl: str):
+        super().__init__()
+        self.text = text
+        self.sl = sl
+        self.tl = tl
+
+    def run(self):
+        try:
+            result = google_translate(self.text, self.sl, self.tl)
+            self.done.emit(result, self.sl)
+        except urllib.error.URLError as e:
+            self.error.emit(f"Lỗi mạng: {e.reason}")
+        except Exception as e:
+            self.error.emit(str(e))
+
+
+class SpellCheckWorker(QThread):
+    done = pyqtSignal(list, str)   # (match_dicts, corrected_text)
+    error = pyqtSignal(str)
+
+    def __init__(self, text: str, remote: bool = False):
+        super().__init__()
+        self.text = text
+        self.remote = remote
+
+    @staticmethod
+    def _get_len(m) -> int:
+        """Find error-length attribute regardless of library version."""
+        for attr in ("errorLength", "matchedLength", "length", "errorLen"):
+            v = getattr(m, attr, None)
+            if isinstance(v, int) and v > 0:
+                return v
+        # last resort: scan all attrs
+        for attr in dir(m):
+            if "length" in attr.lower():
+                v = getattr(m, attr, None)
+                if isinstance(v, int) and v > 0:
+                    return v
+        return 1
+
+    def run(self):
+        try:
+            tool = get_spell_tool(remote=self.remote)
+            matches = tool.check(self.text)
+
+            # Debug: log actual Match attrs on first match
+            if matches:
+                import sys
+                length_attrs = {a: getattr(matches[0], a) for a in dir(matches[0]) if not a.startswith("_")}
+                print("Match attrs:", length_attrs, file=sys.stderr)
+
+            # Build dicts without touching library utils (they use unstable attr names)
+            match_dicts = [
+                {
+                    "offset": m.offset,
+                    "errorLength": self._get_len(m),
+                    "message": getattr(m, "message", ""),
+                    "replacements": list(getattr(m, "replacements", []))[:5],
+                }
+                for m in matches
+            ]
+
+            # Apply corrections manually (no dependency on utils.correct)
+            chars = list(self.text)
+            delta = 0
+            for d in match_dicts:
+                if not d["replacements"]:
+                    continue
+                start = d["offset"] + delta
+                end = start + d["errorLength"]
+                rep = d["replacements"][0]
+                chars[start:end] = list(rep)
+                delta += len(rep) - d["errorLength"]
+            corrected = "".join(chars)
+
+            self.done.emit(match_dicts, corrected)
+        except Exception as e:
+            self.error.emit(str(e))
+
 
 # ── Main Window ───────────────────────────────────────────────────────────────
 class TranslatorWindow(QMainWindow):
@@ -197,17 +316,19 @@ class TranslatorWindow(QMainWindow):
         self.sl = sl
         self.tl = tl
         self.copy_result = copy_result
+        self._mode = "translate"          # 'translate' | 'spellcheck'
+        self._server_remote = False       # False=local, True=remote
         self._translate_worker: TranslateWorker | None = None
+        self._spell_worker: SpellCheckWorker | None = None
         self._last_text = ""
-        self._char_count = 0
         self._loading_step = 0
         self._loading_timer = QTimer(self)
         self._loading_timer.setInterval(450)
         self._loading_timer.timeout.connect(self._tick_loading)
 
-        self.setWindowTitle("Clipboard Translator")
-        self.setMinimumSize(760, 520)
-        self.resize(860, 600)
+        self.setWindowTitle("Clipboard Translator & Spell Checker")
+        self.setMinimumSize(800, 540)
+        self.resize(900, 620)
         self.setStyleSheet(STYLE_SHEET)
 
         self._build_ui()
@@ -233,10 +354,19 @@ class TranslatorWindow(QMainWindow):
         self._status_dot = QLabel("● Đang theo dõi clipboard…")
         self._status_dot.setObjectName("status_dot")
 
+        self._pin_btn = QPushButton("📌")
+        self._pin_btn.setObjectName("secondary")
+        self._pin_btn.setFixedWidth(36)
+        self._pin_btn.setFixedHeight(30)
+        self._pin_btn.setToolTip("Ghim luôn trên cùng")
+        self._pin_btn.setCheckable(True)
+        self._pin_btn.clicked.connect(self._toggle_pin)
+
         hdr.addWidget(icon_lbl)
         hdr.addWidget(title)
         hdr.addStretch()
         hdr.addWidget(self._status_dot)
+        hdr.addWidget(self._pin_btn)
         main.addLayout(hdr)
 
         # Separator
@@ -245,8 +375,43 @@ class TranslatorWindow(QMainWindow):
         sep.setStyleSheet(f"background:{BORDER}; max-height:1px;")
         main.addWidget(sep)
 
-        # Lang bar
-        lang_bar = QHBoxLayout()
+        # ── Mode Toggle (pill-shaped segmented control) ────────────────────
+        toggle_row = QHBoxLayout()
+        toggle_row.setSpacing(0)
+
+        toggle_container = QFrame()
+        toggle_container.setFixedHeight(38)
+        toggle_container.setStyleSheet(
+            f"QFrame {{ background:{SURFACE2}; border-radius:19px; "
+            f"border:1px solid {BORDER}; }}"
+        )
+        tgl_layout = QHBoxLayout(toggle_container)
+        tgl_layout.setContentsMargins(4, 4, 4, 4)
+        tgl_layout.setSpacing(2)
+
+        self._translate_mode_btn = QPushButton("🌐  Dịch")
+        self._translate_mode_btn.setFixedHeight(28)
+        self._translate_mode_btn.clicked.connect(lambda: self._set_mode("translate"))
+
+        self._spell_mode_btn = QPushButton("✓  Sửa lỗi chính tả")
+        self._spell_mode_btn.setFixedHeight(28)
+        self._spell_mode_btn.clicked.connect(lambda: self._set_mode("spellcheck"))
+
+        for btn in (self._translate_mode_btn, self._spell_mode_btn):
+            btn.setStyleSheet("border-radius: 14px; padding: 2px 16px; font-size: 13px;")
+
+        tgl_layout.addWidget(self._translate_mode_btn)
+        tgl_layout.addWidget(self._spell_mode_btn)
+
+        toggle_row.addStretch()
+        toggle_row.addWidget(toggle_container)
+        toggle_row.addStretch()
+        main.addLayout(toggle_row)
+
+        # ── Lang bar (translate mode only) ────────────────────────────────
+        self._lang_bar_widget = QWidget()
+        lang_bar = QHBoxLayout(self._lang_bar_widget)
+        lang_bar.setContentsMargins(0, 0, 0, 0)
         lang_bar.setSpacing(8)
 
         sl_lbl = QLabel("NGUỒN")
@@ -267,18 +432,11 @@ class TranslatorWindow(QMainWindow):
 
         self._copy_btn = QPushButton("📋 Sao chép bản dịch")
         self._copy_btn.setObjectName("secondary")
-        self._copy_btn.clicked.connect(self._copy_translation)
+        self._copy_btn.clicked.connect(self._copy_output)
 
-        self._retranslate_btn = QPushButton("↺ Dịch lại")
-        self._retranslate_btn.setObjectName("secondary")
-        self._retranslate_btn.clicked.connect(self._retranslate)
-
-        self._pin_btn = QPushButton("📌")
-        self._pin_btn.setObjectName("secondary")
-        self._pin_btn.setFixedWidth(36)
-        self._pin_btn.setToolTip("Ghim luôn trên cùng")
-        self._pin_btn.setCheckable(True)
-        self._pin_btn.clicked.connect(self._toggle_pin)
+        self._action_btn = QPushButton("↺ Dịch lại")
+        self._action_btn.setObjectName("secondary")
+        self._action_btn.clicked.connect(self._redo_action)
 
         lang_bar.addWidget(sl_lbl)
         lang_bar.addWidget(self._sl_combo)
@@ -286,35 +444,82 @@ class TranslatorWindow(QMainWindow):
         lang_bar.addWidget(tl_lbl)
         lang_bar.addWidget(self._tl_combo)
         lang_bar.addStretch()
-        lang_bar.addWidget(self._retranslate_btn)
+        lang_bar.addWidget(self._action_btn)
         lang_bar.addWidget(self._copy_btn)
-        lang_bar.addWidget(self._pin_btn)
-        main.addLayout(lang_bar)
+        main.addWidget(self._lang_bar_widget)
+
+        # ── Spell mode action bar (hidden initially) ──────────────────────
+        self._spell_bar_widget = QWidget()
+        spell_bar = QHBoxLayout(self._spell_bar_widget)
+        spell_bar.setContentsMargins(0, 0, 0, 0)
+        spell_bar.setSpacing(8)
+
+        self._error_count_lbl = QLabel("")
+        self._error_count_lbl.setObjectName("lang_label")
+
+        # Server toggle pill
+        srv_container = QFrame()
+        srv_container.setFixedHeight(30)
+        srv_container.setStyleSheet(
+            f"QFrame {{ background:{SURFACE2}; border-radius:15px; border:1px solid {BORDER}; }}"
+        )
+        srv_layout = QHBoxLayout(srv_container)
+        srv_layout.setContentsMargins(3, 3, 3, 3)
+        srv_layout.setSpacing(2)
+
+        self._local_srv_btn = QPushButton("🖥 Local")
+        self._local_srv_btn.setFixedHeight(22)
+        self._local_srv_btn.clicked.connect(lambda: self._set_server(remote=False))
+
+        self._remote_srv_btn = QPushButton("☁ Remote")
+        self._remote_srv_btn.setFixedHeight(22)
+        self._remote_srv_btn.clicked.connect(lambda: self._set_server(remote=True))
+
+        for b in (self._local_srv_btn, self._remote_srv_btn):
+            b.setStyleSheet("border-radius:11px; padding:0 10px; font-size:12px;")
+        srv_layout.addWidget(self._local_srv_btn)
+        srv_layout.addWidget(self._remote_srv_btn)
+
+        self._copy_corrected_btn = QPushButton("📋 Sao chép bản đã sửa")
+        self._copy_corrected_btn.clicked.connect(self._copy_output)
+
+        self._recheck_btn = QPushButton("↺ Kiểm tra lại")
+        self._recheck_btn.setObjectName("secondary")
+        self._recheck_btn.clicked.connect(self._redo_action)
+
+        spell_bar.addWidget(self._error_count_lbl)
+        spell_bar.addStretch()
+        spell_bar.addWidget(srv_container)
+        spell_bar.addWidget(self._recheck_btn)
+        spell_bar.addWidget(self._copy_corrected_btn)
+
+        self._spell_bar_widget.setVisible(False)
+        main.addWidget(self._spell_bar_widget)
 
         # Text panels
         panels = QHBoxLayout()
         panels.setSpacing(10)
 
         src_box = QVBoxLayout()
-        src_lbl = QLabel("Văn bản gốc")
-        src_lbl.setObjectName("lang_label")
+        self._src_lbl = QLabel("Văn bản gốc")
+        self._src_lbl.setObjectName("lang_label")
         self._src_edit = QTextEdit()
         self._src_edit.setReadOnly(True)
-        self._src_edit.setPlaceholderText("Copy bất kỳ text nào để bắt đầu dịch…")
-        src_box.addWidget(src_lbl)
+        self._src_edit.setPlaceholderText("Copy bất kỳ text nào để bắt đầu…")
+        src_box.addWidget(self._src_lbl)
         src_box.addWidget(self._src_edit)
 
         dst_box = QVBoxLayout()
-        dst_lbl = QLabel("Bản dịch")
-        dst_lbl.setObjectName("lang_label")
+        self._dst_lbl = QLabel("Bản dịch")
+        self._dst_lbl.setObjectName("lang_label")
         self._dst_edit = QTextEdit()
         self._dst_edit.setReadOnly(True)
-        self._dst_edit.setPlaceholderText("Kết quả dịch sẽ hiển thị ở đây…")
+        self._dst_edit.setPlaceholderText("Kết quả sẽ hiển thị ở đây…")
         self._dst_edit.setStyleSheet(
             f"background:{SURFACE}; border-color:{ACCENT}; color:{TEXT_PRI};"
             f"border-radius:8px; padding:10px; font-size:14px;"
         )
-        dst_box.addWidget(dst_lbl)
+        dst_box.addWidget(self._dst_lbl)
         dst_box.addWidget(self._dst_edit)
 
         panels.addLayout(src_box)
@@ -329,6 +534,9 @@ class TranslatorWindow(QMainWindow):
         self._char_label = QLabel("")
         sb.addPermanentWidget(self._char_label)
 
+        self._update_toggle_style()
+        self._update_server_style()
+
     def _make_combo(self, langs: list, default: str) -> QComboBox:
         cb = QComboBox()
         for k in langs:
@@ -336,6 +544,87 @@ class TranslatorWindow(QMainWindow):
         idx = langs.index(default) if default in langs else 0
         cb.setCurrentIndex(idx)
         return cb
+
+    # ── Mode toggle ───────────────────────────────────────────────────────────
+    def _set_mode(self, mode: str):
+        if self._mode == mode:
+            return
+        self._mode = mode
+        is_translate = mode == "translate"
+
+        self._lang_bar_widget.setVisible(is_translate)
+        self._spell_bar_widget.setVisible(not is_translate)
+
+        if is_translate:
+            self._dst_lbl.setText("Bản dịch")
+            self._src_lbl.setText("Văn bản gốc")
+            self._dst_edit.setStyleSheet(
+                f"background:{SURFACE}; border-color:{ACCENT}; color:{TEXT_PRI};"
+                f"border-radius:8px; padding:10px; font-size:14px;"
+            )
+            self._dst_edit.setPlaceholderText("Kết quả dịch sẽ hiển thị ở đây…")
+            self._src_edit.setPlaceholderText("Copy bất kỳ text nào để bắt đầu dịch…")
+        else:
+            self._dst_lbl.setText("Văn bản đã sửa")
+            self._src_lbl.setText("Văn bản gốc (lỗi được highlight đỏ)")
+            self._dst_edit.setStyleSheet(
+                f"background:{SURFACE}; border-color:{SUCCESS}; color:{TEXT_PRI};"
+                f"border-radius:8px; padding:10px; font-size:14px;"
+            )
+            self._dst_edit.setPlaceholderText("Văn bản đã được sửa lỗi sẽ hiển thị ở đây…")
+            self._src_edit.setPlaceholderText("Copy text tiếng Anh để kiểm tra lỗi chính tả…")
+            if not HAS_SPELL:
+                self._set_status("⚠ Cần cài: pip install language-tool-python", WARN_CLR)
+
+        self._update_toggle_style()
+
+        # Re-process current text in new mode
+        if self._last_text:
+            self._src_edit.setPlainText(self._last_text)
+            self._dst_edit.clear()
+            self._error_count_lbl.setText("")
+            if is_translate:
+                self._trigger_translate(self._last_text)
+            else:
+                self._trigger_spellcheck(self._last_text)
+
+    def _update_toggle_style(self):
+        active_style = (
+            f"border-radius:14px; padding:2px 16px; font-size:13px;"
+            f"background:{ACCENT}; color:white; border:none; font-weight:600;"
+        )
+        inactive_style = (
+            f"border-radius:14px; padding:2px 16px; font-size:13px;"
+            f"background:transparent; color:{TEXT_SEC}; border:none; font-weight:400;"
+        )
+        if self._mode == "translate":
+            self._translate_mode_btn.setStyleSheet(active_style)
+            self._spell_mode_btn.setStyleSheet(inactive_style)
+        else:
+            self._translate_mode_btn.setStyleSheet(inactive_style)
+            self._spell_mode_btn.setStyleSheet(active_style)
+
+    def _set_server(self, remote: bool):
+        if self._server_remote == remote:
+            return
+        self._server_remote = remote
+        self._update_server_style()
+        label = "☁ Remote (api.languagetool.org)" if remote else "🖥 Local (localhost)"
+        self._set_status(f"Server: {label}", ACCENT2)
+        if self._last_text and self._mode == "spellcheck":
+            self._trigger_spellcheck(self._last_text)
+
+    def _update_server_style(self):
+        active = (
+            f"border-radius:11px; padding:0 10px; font-size:12px;"
+            f"background:{ACCENT}; color:white; border:none; font-weight:600;"
+        )
+        inactive = (
+            f"border-radius:11px; padding:0 10px; font-size:12px;"
+            f"background:transparent; color:{TEXT_SEC}; border:none; font-weight:400;"
+        )
+        self._local_srv_btn.setStyleSheet(inactive if self._server_remote else active)
+        self._remote_srv_btn.setStyleSheet(active if self._server_remote else inactive)
 
     # ── Watcher ───────────────────────────────────────────────────────────────
     def _start_watcher(self):
@@ -347,13 +636,17 @@ class TranslatorWindow(QMainWindow):
         self._last_text = text
         self._src_edit.setPlainText(text)
         self._char_label.setText(f"{len(text)} ký tự")
-        self._trigger_translate(text)
+        if self._mode == "translate":
+            self._trigger_translate(text)
+        else:
+            self._trigger_spellcheck(text)
 
     # ── Translation ───────────────────────────────────────────────────────────
     def _tick_loading(self):
         dots = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
         self._loading_step = (self._loading_step + 1) % len(dots)
-        self._status_dot.setText(f"{dots[self._loading_step]}  Đang dịch…")
+        label = "Đang dịch…" if self._mode == "translate" else "Đang kiểm tra…"
+        self._status_dot.setText(f"{dots[self._loading_step]}  {label}")
         self._status_dot.setStyleSheet(f"color:{ACCENT2}; font-size:13px;")
 
     def _trigger_translate(self, text: str):
@@ -386,9 +679,63 @@ class TranslatorWindow(QMainWindow):
             f"Gốc: {len(self._last_text)} ký tự  ·  Dịch: {len(result)} ký tự"
         )
 
+    # ── Spell check ───────────────────────────────────────────────────────────
+    def _trigger_spellcheck(self, text: str):
+        if not text.strip():
+            return
+        if not HAS_SPELL:
+            self._dst_edit.setPlainText(
+                "⚠ Chưa cài language-tool-python.\n\n"
+                "Chạy lệnh sau để cài:\n\n  pip install language-tool-python"
+            )
+            self._set_status("⚠ Thiếu thư viện", WARN_CLR)
+            return
+
+        self._loading_step = 0
+        self._loading_timer.start()
+        self._dst_edit.setPlainText("")
+        self._dst_edit.setPlaceholderText("⏳  Đang kiểm tra lỗi chính tả…")
+        self._error_count_lbl.setText("")
+
+        if self._spell_worker and self._spell_worker.isRunning():
+            self._spell_worker.quit()
+
+        self._spell_worker = SpellCheckWorker(text, remote=self._server_remote)
+        self._spell_worker.done.connect(self._on_spellchecked)
+        self._spell_worker.error.connect(self._on_error)
+        self._spell_worker.start()
+
+    def _on_spellchecked(self, matches: list, corrected: str):
+        self._loading_timer.stop()
+        n = len(matches)
+
+        # Highlight errors in source panel
+        if n > 0:
+            self._src_edit.setHtml(build_highlighted_html(self._last_text, matches))
+        else:
+            self._src_edit.setPlainText(self._last_text)
+
+        # Show corrected text in destination panel
+        self._dst_edit.setPlaceholderText("Văn bản đã được sửa lỗi sẽ hiển thị ở đây…")
+        if n == 0:
+            self._dst_edit.setPlainText("✓ Không tìm thấy lỗi nào!")
+            self._error_count_lbl.setText("✓ Không có lỗi")
+            self._error_count_lbl.setStyleSheet(f"color:{SUCCESS}; font-size:12px; font-weight:600;")
+            self._set_status("✓ Không tìm thấy lỗi", SUCCESS)
+        else:
+            self._dst_edit.setPlainText(corrected)
+            plural = "lỗi" if n == 1 else "lỗi"
+            self._error_count_lbl.setText(f"⚠ Tìm thấy {n} {plural}")
+            self._error_count_lbl.setStyleSheet(f"color:{WARN_CLR}; font-size:12px; font-weight:600;")
+            self._set_status(f"⚠ {n} lỗi được tìm thấy", WARN_CLR)
+
+        self._sb_label.setText(
+            f"Gốc: {len(self._last_text)} ký tự  ·  {n} lỗi"
+        )
+
     def _on_error(self, msg: str):
         self._loading_timer.stop()
-        self._dst_edit.setPlaceholderText("Kết quả dịch sẽ hiển thị ở đây…")
+        self._dst_edit.setPlaceholderText("")
         self._dst_edit.setPlainText(f"[Lỗi] {msg}")
         self._set_status(f"✗ {msg}", ERROR_CLR)
 
@@ -411,16 +758,22 @@ class TranslatorWindow(QMainWindow):
         if self._last_text:
             self._trigger_translate(self._last_text)
 
-    def _copy_translation(self):
+    def _copy_output(self):
         text = self._dst_edit.toPlainText()
-        if text:
-            QApplication.clipboard().setText(text)
-            self._set_status("📋 Đã sao chép!", ACCENT2)
-            QTimer.singleShot(2000, lambda: self._set_status("● Đang theo dõi clipboard…", TEXT_SEC))
+        if not text or text.startswith("✓ Không tìm thấy"):
+            return
+        QApplication.clipboard().setText(text)
+        label = "📋 Đã sao chép bản dịch!" if self._mode == "translate" else "📋 Đã sao chép bản sửa!"
+        self._set_status(label, ACCENT2)
+        QTimer.singleShot(2000, lambda: self._set_status("● Đang theo dõi clipboard…", TEXT_SEC))
 
-    def _retranslate(self):
-        if self._last_text:
+    def _redo_action(self):
+        if not self._last_text:
+            return
+        if self._mode == "translate":
             self._trigger_translate(self._last_text)
+        else:
+            self._trigger_spellcheck(self._last_text)
 
     def _toggle_pin(self, checked: bool):
         flags = self.windowFlags()
