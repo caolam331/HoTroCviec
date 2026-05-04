@@ -1,9 +1,9 @@
-import json
+import re
 import sys
 import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
+from typing import Any, Dict, List, Tuple
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
@@ -26,49 +26,71 @@ from PyQt5.QtWidgets import (
 
 
 class DavinciProjectParser:
-    """Parse DaVinci project file and flatten module config for audit."""
+    """Parse DaVinci/Fusion-related files and flatten module config for audit."""
+
+    DAVINCI_EXTENSIONS = {".drp", ".drt", ".drx", ".setting", ".comp"}
 
     def parse_project(self, project_path: Path) -> Dict[str, List[Tuple[str, str]]]:
         if not project_path.exists():
             raise FileNotFoundError(f"File không tồn tại: {project_path}")
 
-        if project_path.suffix.lower() == ".drp":
+        suffix = project_path.suffix.lower()
+        if suffix not in self.DAVINCI_EXTENSIONS:
+            raise ValueError("Định dạng chưa hỗ trợ. Chỉ hỗ trợ .drp/.drt/.drx/.setting/.comp")
+
+        if suffix == ".drp":
             return self._parse_drp(project_path)
 
-        if project_path.suffix.lower() in {".xml", ".drx", ".drt"}:
-            return self._parse_xml_file(project_path.read_text(encoding="utf-8", errors="ignore"))
+        if suffix in {".drt", ".drx"}:
+            return self._parse_drt_or_drx(project_path)
 
-        if project_path.suffix.lower() == ".json":
-            return self._parse_json(project_path.read_text(encoding="utf-8", errors="ignore"))
-
-        raise ValueError("Định dạng chưa hỗ trợ. Hãy dùng .drp/.xml/.drx/.drt/.json")
+        return self._parse_fusion_setting(project_path.read_text(encoding="utf-8", errors="ignore"))
 
     def _parse_drp(self, drp_path: Path) -> Dict[str, List[Tuple[str, str]]]:
         with zipfile.ZipFile(drp_path, "r") as archive:
-            xml_candidates = [n for n in archive.namelist() if n.lower().endswith((".xml", ".drx", ".drt"))]
-            json_candidates = [n for n in archive.namelist() if n.lower().endswith(".json")]
+            xml_candidates = [
+                name
+                for name in archive.namelist()
+                if name.lower().endswith(".xml") and "project" in name.lower()
+            ]
+            if not xml_candidates:
+                xml_candidates = [name for name in archive.namelist() if name.lower().endswith(".xml")]
 
-            if xml_candidates:
-                content = archive.read(xml_candidates[0]).decode("utf-8", errors="ignore")
-                return self._parse_xml_file(content)
+            if not xml_candidates:
+                raise ValueError(".drp không chứa XML project hợp lệ")
 
-            if json_candidates:
-                content = archive.read(json_candidates[0]).decode("utf-8", errors="ignore")
-                return self._parse_json(content)
+            xml_content = archive.read(xml_candidates[0]).decode("utf-8", errors="ignore")
+            return self._parse_xml_modules(xml_content)
 
-            raise ValueError("Không tìm thấy XML/JSON bên trong file .drp")
+    def _parse_drt_or_drx(self, file_path: Path) -> Dict[str, List[Tuple[str, str]]]:
+        raw = file_path.read_bytes()
 
-    def _parse_xml_file(self, xml_content: str) -> Dict[str, List[Tuple[str, str]]]:
+        if raw.startswith(b"PK"):
+            with zipfile.ZipFile(file_path, "r") as archive:
+                xml_candidates = [name for name in archive.namelist() if name.lower().endswith(".xml")]
+                if not xml_candidates:
+                    raise ValueError(f"{file_path.suffix} không chứa XML hợp lệ")
+                xml_content = archive.read(xml_candidates[0]).decode("utf-8", errors="ignore")
+                return self._parse_xml_modules(xml_content)
+
+        text = raw.decode("utf-8", errors="ignore")
+        if "<" in text and ">" in text:
+            return self._parse_xml_modules(text)
+
+        raise ValueError(f"Không đọc được dữ liệu {file_path.suffix} (không phải XML/ZIP XML)")
+
+    def _parse_xml_modules(self, xml_content: str) -> Dict[str, List[Tuple[str, str]]]:
         root = ET.fromstring(xml_content)
         modules: Dict[str, List[Tuple[str, str]]] = {}
 
         for node in root.iter():
             node_name = node.tag.lower()
-            if any(k in node_name for k in ["module", "node", "plugin", "effect", "tool"]):
+            if any(k in node_name for k in ["node", "plugin", "effect", "tool", "grade"]):
                 module_name = node.attrib.get("name") or node.attrib.get("id") or node.tag
-                entries = []
+                entries: List[Tuple[str, str]] = []
+
                 for key, value in node.attrib.items():
-                    entries.append((key, value))
+                    entries.append((key, str(value)))
 
                 for child in node:
                     child_label = child.attrib.get("name") or child.tag
@@ -76,7 +98,7 @@ class DavinciProjectParser:
                     if child_value:
                         entries.append((child_label, child_value))
                     for ck, cv in child.attrib.items():
-                        entries.append((f"{child_label}.{ck}", cv))
+                        entries.append((f"{child_label}.{ck}", str(cv)))
 
                 if entries:
                     modules.setdefault(module_name, []).extend(entries)
@@ -99,33 +121,35 @@ class DavinciProjectParser:
 
         for child in element:
             rows.extend(self._flatten_xml_generic(child, path))
+
         return rows
 
-    def _parse_json(self, json_content: str) -> Dict[str, List[Tuple[str, str]]]:
-        data = json.loads(json_content)
+    def _parse_fusion_setting(self, content: str) -> Dict[str, List[Tuple[str, str]]]:
         modules: Dict[str, List[Tuple[str, str]]] = {}
+        active_module = "fusion_config"
 
-        if isinstance(data, dict):
-            for key, value in data.items():
-                if isinstance(value, (dict, list)):
-                    modules[key] = self._flatten_json(value, key)
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("--"):
+                continue
+
+            tool_match = re.match(r"([A-Za-z0-9_]+)\s*=\s*([A-Za-z0-9_]+)\s*\{", stripped)
+            if tool_match:
+                active_module = tool_match.group(1)
+                modules.setdefault(active_module, [])
+                modules[active_module].append(("tool_type", tool_match.group(2)))
+                continue
+
+            kv_match = re.match(r'([A-Za-z0-9_\.\[\]"\']+)\s*=\s*(.+)', stripped)
+            if kv_match:
+                key = kv_match.group(1)
+                value = kv_match.group(2).rstrip(",")
+                modules.setdefault(active_module, []).append((key, value))
 
         if not modules:
-            modules["project"] = self._flatten_json(data, "project")
+            modules["fusion_config"] = [("raw", content[:10000])]
 
         return modules
-
-    def _flatten_json(self, value: Any, prefix: str) -> List[Tuple[str, str]]:
-        rows: List[Tuple[str, str]] = []
-        if isinstance(value, dict):
-            for k, v in value.items():
-                rows.extend(self._flatten_json(v, f"{prefix}.{k}"))
-        elif isinstance(value, list):
-            for idx, item in enumerate(value):
-                rows.extend(self._flatten_json(item, f"{prefix}[{idx}]"))
-        else:
-            rows.append((prefix, str(value)))
-        return rows
 
 
 class DavinciAuditWindow(QMainWindow):
@@ -172,9 +196,9 @@ class DavinciAuditWindow(QMainWindow):
     def open_project(self):
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Chọn DaVinci project",
+            "Chọn file DaVinci/Fusion",
             "",
-            "DaVinci Project (*.drp *.xml *.drx *.drt *.json);;All Files (*)",
+            "DaVinci/Fusion Files (*.drp *.drt *.drx *.setting *.comp);;All Files (*)",
         )
         if not file_path:
             return
